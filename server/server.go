@@ -9,12 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash-server/hasher"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jaredcantwell/hash-server/hasher"
 )
 
 // Server implements the functionality of this package.
@@ -71,6 +72,8 @@ func (s *Server) Run() {
 	// Now that we can guarantee no new requests will go into the hasher,
 	// let outstanding requests drain so we get a clean shutdown
 	s.hasher.Drain()
+
+	fmt.Println("Server shutdown.")
 }
 
 // parsePathParamInt attempts to parse out a trailing int64 from the provided
@@ -107,9 +110,15 @@ func (s *Server) hashGETHandler(w http.ResponseWriter, r *http.Request) {
 
 // hashPOSTHandler is invoked on a POST request to compute a new password hash
 func (s *Server) hashPOSTHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/hash" {
+		http.Error(w, "Invalid path.", 404)
+		return
+	}
+
 	password := r.FormValue("password")
 	if password == "" {
 		http.Error(w, "Invalid password parameter.", 400)
+		return
 	}
 
 	id := s.hasher.Compute(password)

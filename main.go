@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"hash-server/server"
+
+	"github.com/jaredcantwell/hash-server/server"
 )
 
 var flagPort int
