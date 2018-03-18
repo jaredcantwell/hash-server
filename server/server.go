@@ -26,7 +26,7 @@ type Server struct {
 }
 
 // New creates and initializes a new Server that will listen on the supplied
-// support and provide the http functionality of this package.  The server will
+// port and provide the http functionality of this package.  The server will
 // not begin listening though.  Call Run to startup the server for incoming
 // connections.
 func New(port int) *Server {
