@@ -28,7 +28,7 @@ This project implements the following APIs:
 
 Method | Description
 -------|------------
-POST /hash | Accepts a password parameter and returns an integer id that can be used with the GET method to retrieve the hach of the password at a later time.
+POST /hash | Accepts a password parameter and returns an integer id that can be used with the GET method to retrieve the hash of the password at a later time.
 GET /hash/{hashId} | Retrieves the hash of a password requested by a previous call to POST /hash. A hash can only be retrieved once.
 GET /stats | Gets stats about the total number of hash requests and the average hash processing time.
 POST /shutdown | Requests the server to cleanly shutdown.  NOTE: This method will return immediately, but shutdown may take longer to complete if there are many in-flight requests.
@@ -52,6 +52,6 @@ The AsyncHasher (package hasher) handles mangement of the async hashing operatio
  - Improve documentation for the REST API.  I would love to use something like swagger, but that requires packages outside of the standard library.  Regardless, since this provides an API, that API should be well documented somewhere that is ideally programatically accessbile and documented close to the code.
  - GET /hash should distinguish between not yet complete and already retrieved.
  - Much better testing
-  - The net/http/httptest library looks very powerful for doing more in depth API testing.  I did not have time to integrate this into my unit tests.
-  - More edge case and stress testing.  Good tests usually take longer to write than the code they're testing.  I didn't have to write all these tests, but I did document the tests that I _would_ write if I did have more time.  Hopefully this can suffice in showing the edge cases that should be tested with more time.
-  - The code could make better use of interfaces to faciliate more targeted testing.  For example, it would be nice to test all the async background task logic without having to actually execute operations that take 5 seconds each, which kills test time.  Unfortuantely, I didn't have time to hammer these good testing interfaces out.
+   - The net/http/httptest library looks very powerful for doing more in depth API testing.  I did not have time to integrate this into my unit tests.
+   - More edge case and stress testing.  Good tests usually take longer to write than the code they're testing.  I didn't have to write all these tests, but I did document the tests that I _would_ write if I did have more time.  Hopefully this can suffice in showing the edge cases that should be tested with more time.
+   - The code could make better use of interfaces to faciliate more targeted testing.  For example, it would be nice to test all the async background task logic without having to actually execute operations that take 5 seconds each, which kills test time.  Unfortuantely, I didn't have time to hammer these good testing interfaces out.
