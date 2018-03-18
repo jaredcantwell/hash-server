@@ -6,6 +6,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 // Server implements the functionality of this package.
 type Server struct {
 	shutdownChan chan interface{}
+	shutdownDone chan interface{}
 	hasher       *hasher.AsyncHasher
 	srv          *http.Server
 }
@@ -33,6 +35,7 @@ func New(port int) *Server {
 	var server Server
 	server.srv = &http.Server{Addr: fmt.Sprintf(":%d", port)}
 	server.shutdownChan = make(chan interface{}, 1)
+	server.shutdownDone = make(chan interface{})
 	server.hasher = hasher.New()
 	return &server
 }
@@ -41,7 +44,8 @@ func New(port int) *Server {
 // Run is a blocking call and will not return until a POST /shutdown request is
 // made, at which point everything will be cleaned up and Run will return.
 func (s *Server) Run() {
-	http.HandleFunc("/hash/", mux(s.hashGETHandler, s.hashPOSTHandler))
+	http.HandleFunc("/hash", mux(nil, s.hashPOSTHandler))
+	http.HandleFunc("/hash/", mux(s.hashGETHandler, nil))
 	http.HandleFunc("/stats", mux(s.statsHandler, nil))
 	http.HandleFunc("/shutdown", mux(nil, s.shutdownHandler))
 
@@ -63,7 +67,8 @@ func (s *Server) Run() {
 	case <-listenErr:
 		// Don't shutdown the server because it never started
 	case <-s.shutdownChan:
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+		defer cancel()
 		if err := s.srv.Shutdown(ctx); err != nil {
 			panic(err) // failure/timeout shutting down the server gracefully
 		}
@@ -74,6 +79,22 @@ func (s *Server) Run() {
 	s.hasher.Drain()
 
 	fmt.Println("Server shutdown.")
+
+	// Signal to any callers of Shutdown() that Run() is about to exit
+	close(s.shutdownDone)
+}
+
+// Shutdown gracefully stops the server and waits until all cleanup is
+// completed before returning.
+func (s *Server) Shutdown() {
+	s.shutdownHandler(nil, nil)
+
+	// Wait until the shutdownDone channel is closed.  Doing this over waiting for an
+	// entry into the channel means that multiple callers could technically safely call
+	// shutdown.
+	select {
+	case <-s.shutdownDone:
+	}
 }
 
 // parsePathParamInt attempts to parse out a trailing int64 from the provided
@@ -110,14 +131,25 @@ func (s *Server) hashGETHandler(w http.ResponseWriter, r *http.Request) {
 
 // hashPOSTHandler is invoked on a POST request to compute a new password hash
 func (s *Server) hashPOSTHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/hash" {
-		http.Error(w, "Invalid path.", 404)
+	// NOTE: We have to parse the body of the request ourselves.  The instructions state that we should
+	// handle a body of "password=<the password to hash>".  Without being more strict about the encoding,
+	// r.FormValue has problems with special characters (like % and &), and doesn't do the right thing
+	// if you actually want those values in your password.  I chose to allow them in the password without
+	// any special encoding, but to support this properly a JSON input or other encoding that can allow
+	// special characters like these should be used.
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	body := buf.String()
+
+	if !strings.HasPrefix(body, "password=") {
+		http.Error(w, "Invalid password parameter.", 400)
 		return
 	}
 
-	password := r.FormValue("password")
+	password := strings.TrimPrefix(body, "password=")
+
 	if password == "" {
-		http.Error(w, "Invalid password parameter.", 400)
+		http.Error(w, "No password supplied.", 400)
 		return
 	}
 
@@ -163,12 +195,14 @@ func mux(get func(http.ResponseWriter, *http.Request),
 		case "POST":
 			if post == nil {
 				http.Error(w, "Invalid request method.", 405)
+				return
 			}
 
 			post(w, r)
 		case "GET":
 			if get == nil {
 				http.Error(w, "Invalid request method.", 405)
+				return
 			}
 
 			get(w, r)

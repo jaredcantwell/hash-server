@@ -38,6 +38,7 @@ func New() *AsyncHasher {
 	hasher.hashRequestChan = make(chan hashRequest, 100)
 	hasher.statUpdateChan = make(chan time.Duration, 100)
 	hasher.statsChan = make(chan Stats)
+	hasher.shutdown = make(chan interface{})
 
 	go hasher.eventLoop()
 
@@ -133,6 +134,7 @@ func (h *AsyncHasher) eventLoop() {
 	var hashes = make(map[int64]string)
 	var stats Stats
 
+loop:
 	for {
 		select {
 		// A hash computation has completed and is adding into the map
@@ -159,7 +161,7 @@ func (h *AsyncHasher) eventLoop() {
 			stats.update(elapsed)
 			// Drain has been called and its time to exit this loop
 		case <-h.shutdown:
-			break
+			break loop
 		}
 	}
 
