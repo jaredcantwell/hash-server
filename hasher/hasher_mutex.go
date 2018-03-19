@@ -76,7 +76,6 @@ func (h *AsyncHasherMutex) GetAndRemoveHash(id int64) (string, error) {
 	h.hashMutex.Lock()
 	defer h.hashMutex.Unlock()
 
-	// get entry in the map and put it back on the channel
 	val, exists := h.hashes[id]
 	if !exists {
 		return "", errors.New("id not found")
