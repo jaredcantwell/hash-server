@@ -23,7 +23,7 @@ import (
 type Server struct {
 	shutdownChan chan interface{}
 	shutdownDone chan interface{}
-	hasher       *hasher.AsyncHasher
+	hasher       hasher.AsyncHasher
 	srv          *http.Server
 }
 
@@ -36,7 +36,8 @@ func New(port int) *Server {
 	server.srv = &http.Server{Addr: fmt.Sprintf(":%d", port)}
 	server.shutdownChan = make(chan interface{}, 1)
 	server.shutdownDone = make(chan interface{})
-	server.hasher = hasher.New()
+	server.hasher = hasher.NewHasherChannel()
+	//server.hasher = hasher.NewHasherMutex()
 	return &server
 }
 

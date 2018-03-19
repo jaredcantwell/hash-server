@@ -39,6 +39,13 @@ The Server (package server) wraps all the logic around launching the http server
 ### Hasher
 The AsyncHasher (package hasher) handles mangement of the async hashing operations.  It coordinates background requests, tracks stats, and can cleanly shutdown when requested.
 
+AsyncHasher is an interface.  There are two concrete implementations:
+
+Class | Description
+------|------------
+AsyncHasherChannel | Uses channels as the primary means of synchronization for get/set operations on the map of hashes and accessing the stats.
+AsyncHasherMutex | Uses mutexes to protect the map of hashes and the stats.  No channels are used.
+
 ## Notes
 ### Design Decisions / Assumptions
  - I am assuming the purpose of the project is to mimic long-running operations and return "async handles" to the user, which they can use to poll for the completion.  Therefore, I decided to not store the hash results in memory indefinitely, which could cause unbounded memory growth.  Instead, getting the hash will remove the id from the cache.  But it means that multiple calls to GET /hash/### will fail after the first one.  This could be adjusted to keep a result for some duration too.
@@ -47,6 +54,7 @@ The AsyncHasher (package hasher) handles mangement of the async hashing operatio
 
 ### Notes
  - This is my first Go app ever.  I tried to keep it idiomatic Go (i.e. no mutexes).  In the real world, I'd have to learn more to know if these are the best decisions or not.
+ - I implemented an AsyncHasherMutex that uses mutexes instead of channels too.  This feels more straightforward, but I'm unsure if its "good" Go code.  If the hasher were more complicated the locking coule get to the point that channels would start to make more sense.
 
 ### Improvements
  - Improve documentation for the REST API.  I would love to use something like swagger, but that requires packages outside of the standard library.  Regardless, since this provides an API, that API should be well documented somewhere that is ideally programatically accessbile and documented close to the code.

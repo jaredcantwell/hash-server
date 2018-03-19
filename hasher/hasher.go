@@ -21,7 +21,18 @@ import (
 // AsyncHasher performs expensive hashing operations in the background and
 // provides an interface for the user to retrieve computed hashes at a later
 // time asynchronously.
-type AsyncHasher struct {
+type AsyncHasher interface {
+	Compute(password string) int64
+	GetAndRemoveHash(id int64) (string, error)
+	Stats() Stats
+	Drain()
+}
+
+// AsyncHasherChannel is an implementation of the AsyncHasher interface
+// that uses channels as the primary means of synchronization.  No mutexes
+// are used in an attempt to "idomatic" Go.  See AsyncHasherMutex for an
+// implementation using mutexes.
+type AsyncHasherChannel struct {
 	asyncId         int64              // atomic counter of ids to return to ensure uniqueness
 	hashPutChan     chan hashPair      // Communicate that a new hash should be cached
 	hashRequestChan chan hashRequest   // Communicate a request to retrieve a hash
@@ -31,9 +42,9 @@ type AsyncHasher struct {
 	wg              sync.WaitGroup     // Used to wait for all long-running operations to complete on shutdown
 }
 
-// New creates and initializes a new AsyncHasher.
-func New() *AsyncHasher {
-	var hasher AsyncHasher
+// NewHasherChannel creates and initializes a new AsyncHasher.
+func NewHasherChannel() AsyncHasher {
+	var hasher AsyncHasherChannel
 	hasher.hashPutChan = make(chan hashPair, 100)
 	hasher.hashRequestChan = make(chan hashRequest, 100)
 	hasher.statUpdateChan = make(chan time.Duration, 100)
@@ -48,7 +59,7 @@ func New() *AsyncHasher {
 // Compute schedules the supplied password to be hashed asynchronously and
 // returns an id that can be supplied to GetAndRemoveHash at a later time to
 // retrieve the hash.  For details on the hash, see hasher.Compute.
-func (h *AsyncHasher) Compute(password string) int64 {
+func (h *AsyncHasherChannel) Compute(password string) int64 {
 	// Atomically incrementing is the easiest way to have non-conflicting ids.
 	// If security was a concern, we'd want to consider returning a random integer,
 	// or even better a long alphanumeric key.
@@ -82,7 +93,7 @@ func (h *AsyncHasher) Compute(password string) int64 {
 // this function will only return a hash one time for a given id.
 // This id must have been returned from a previous Compute call.
 // If the hash is not completed yet, an error will be returned.
-func (h *AsyncHasher) GetAndRemoveHash(id int64) (string, error) {
+func (h *AsyncHasherChannel) GetAndRemoveHash(id int64) (string, error) {
 	// Now post a request for the hash for the specified id
 	respChan := make(chan hashResponse)
 	h.hashRequestChan <- hashRequest{id, respChan}
@@ -97,7 +108,7 @@ func (h *AsyncHasher) GetAndRemoveHash(id int64) (string, error) {
 // computations being performed, including the total number of Compute
 // requests and the average time (in milliseconds) to perform the hash
 // computation.
-func (h *AsyncHasher) Stats() Stats {
+func (h *AsyncHasherChannel) Stats() Stats {
 	return <-h.statsChan
 }
 
@@ -105,7 +116,7 @@ func (h *AsyncHasher) Stats() Stats {
 // hashes to complete in the background (which could take several seconds
 // because we're simulating these being an expensive operation).  When Drain
 // returns, all resources for the AsyncHasher are in a clean shutdown state.
-func (h *AsyncHasher) Drain() {
+func (h *AsyncHasherChannel) Drain() {
 	h.shutdown <- nil
 	h.wg.Wait()
 }
@@ -128,7 +139,7 @@ func Compute(in string) string {
 // common stats value, this event loop uses channels to synchronize all access
 // such that this is the only thread touching the map of hashes or the central
 // stats value (they are local to this function).
-func (h *AsyncHasher) eventLoop() {
+func (h *AsyncHasherChannel) eventLoop() {
 	h.wg.Add(1)
 
 	var hashes = make(map[int64]string)
